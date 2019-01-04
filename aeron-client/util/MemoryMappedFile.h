@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017 Real Logic Ltd.
+ * Copyright 2014-2018 Real Logic Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,11 +20,12 @@
 #include <memory>
 
 #ifdef _WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif // !NOMINMAX
-
-#include <windows.h>
+    #ifndef NOMINMAX
+        #define NOMINMAX
+    #endif // !NOMINMAX
+    #include <windows.h>
+#else
+    #include <sys/types.h>
 #endif
 
 
@@ -77,9 +78,7 @@ private:
 
     std::uint8_t* m_memory = 0;
     size_t m_memorySize = 0;
-#if !defined(PAGE_SIZE)
-    static size_t PAGE_SIZE;
-#endif
+    static size_t m_page_size;
     static bool fill(FileHandle fd, size_t sz, std::uint8_t);
 
 #ifdef _WIN32

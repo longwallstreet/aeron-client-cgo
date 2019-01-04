@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017 Real Logic Ltd.
+ * Copyright 2014-2018 Real Logic Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,20 +20,54 @@
 namespace aeron {
 
 Subscription::Subscription(
-    ClientConductor &conductor, std::int64_t registrationId, const std::string &channel, std::int32_t streamId) :
+    ClientConductor &conductor,
+    std::int64_t registrationId,
+    const std::string &channel,
+    std::int32_t streamId,
+    std::int32_t channelStatusId) :
     m_conductor(conductor),
     m_channel(channel),
+    m_channelStatusId(channelStatusId),
     m_registrationId(registrationId),
     m_streamId(streamId),
     m_imageList(new struct ImageList(new Image[0], 0)),
     m_isClosed(false)
 {
-
 }
 
 Subscription::~Subscription()
 {
     m_conductor.releaseSubscription(m_registrationId, std::atomic_load_explicit(&m_imageList, std::memory_order_acquire));
+}
+
+void Subscription::addDestination(const std::string& endpointChannel)
+{
+    if (isClosed())
+    {
+        throw util::IllegalStateException(std::string("Subscription is closed"), SOURCEINFO);
+    }
+
+    m_conductor.addRcvDestination(m_registrationId, endpointChannel);
+}
+
+void Subscription::removeDestination(const std::string& endpointChannel)
+{
+    if (isClosed())
+    {
+        throw util::IllegalStateException(std::string("Subscription is closed"), SOURCEINFO);
+    }
+
+    m_conductor.removeRcvDestination(m_registrationId, endpointChannel);
+}
+
+std::int64_t Subscription::channelStatus() const
+{
+    if (isClosed())
+    {
+        return ChannelEndpointStatus::NO_ID_ALLOCATED;
+    }
+
+    return m_conductor.channelStatus(m_channelStatusId);
 }
 
 }

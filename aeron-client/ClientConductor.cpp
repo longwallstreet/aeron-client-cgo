@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017 Real Logic Ltd.
+ * Copyright 2014-2018 Real Logic Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,8 @@ ClientConductor::~ClientConductor()
             delete entry.m_imageList;
             entry.m_imageList = nullptr;
         });
+
+    m_driverProxy.clientClose();
 }
 
 std::int64_t ClientConductor::addPublication(const std::string &channel, std::int32_t streamId)
@@ -97,16 +99,16 @@ std::shared_ptr<Publication> ClientConductor::findPublication(std::int64_t regis
                 break;
 
             case RegistrationStatus::REGISTERED_MEDIA_DRIVER:
-                {
-                    UnsafeBufferPosition publicationLimit(m_counterValuesBuffer, state.m_positionLimitCounterId);
+            {
+                UnsafeBufferPosition publicationLimit(m_counterValuesBuffer, state.m_publicationLimitCounterId);
 
-                    pub = std::make_shared<Publication>(
-                        *this, state.m_channel, state.m_registrationId, state.m_originalRegistrationId, state.m_streamId,
-                        state.m_sessionId, publicationLimit, state.m_buffers);
+                pub = std::make_shared<Publication>(
+                    *this, state.m_channel, state.m_registrationId, state.m_originalRegistrationId,
+                    state.m_streamId, state.m_sessionId, publicationLimit, state.m_channelStatusId, state.m_buffers);
 
-                    state.m_publication = std::weak_ptr<Publication>(pub);
-                }
+                state.m_publication = std::weak_ptr<Publication>(pub);
                 break;
+            }
 
             case RegistrationStatus::ERRORED_MEDIA_DRIVER:
                 throw RegistrationException(state.m_errorCode, state.m_errorMessage, SOURCEINFO);
@@ -179,11 +181,11 @@ std::shared_ptr<ExclusivePublication> ClientConductor::findExclusivePublication(
 
             case RegistrationStatus::REGISTERED_MEDIA_DRIVER:
             {
-                UnsafeBufferPosition publicationLimit(m_counterValuesBuffer, state.m_positionLimitCounterId);
+                UnsafeBufferPosition publicationLimit(m_counterValuesBuffer, state.m_publicationLimitCounterId);
 
                 pub = std::make_shared<ExclusivePublication>(
                     *this, state.m_channel, state.m_registrationId, state.m_originalRegistrationId, state.m_streamId,
-                    state.m_sessionId, publicationLimit, state.m_buffers);
+                    state.m_sessionId, publicationLimit, state.m_channelStatusId, state.m_buffers);
 
                 state.m_publication = std::weak_ptr<ExclusivePublication>(pub);
                 break;
@@ -262,8 +264,7 @@ std::shared_ptr<Subscription> ClientConductor::findSubscription(std::int64_t reg
     {
         if (m_epochClock() > (state.m_timeOfRegistration + m_driverTimeoutMs))
         {
-            throw DriverTimeoutException(
-                strPrintf("No response from driver in %d ms", m_driverTimeoutMs), SOURCEINFO);
+            throw DriverTimeoutException(strPrintf("No response from driver in %d ms", m_driverTimeoutMs), SOURCEINFO);
         }
     }
     else if (!sub && RegistrationStatus::ERRORED_MEDIA_DRIVER == state.m_status)
@@ -306,6 +307,92 @@ void ClientConductor::releaseSubscription(std::int64_t registrationId, struct Im
     }
 }
 
+std::int64_t ClientConductor::addCounter(
+    std::int32_t typeId, const std::uint8_t *keyBuffer, std::size_t keyLength, const std::string& label)
+{
+    verifyDriverIsActive();
+
+    if (keyLength > CountersManager::MAX_KEY_LENGTH)
+    {
+        throw IllegalArgumentException(strPrintf("key length out of bounds: %d", keyLength), SOURCEINFO);
+    }
+
+    if (label.length() > CountersManager::MAX_LABEL_LENGTH)
+    {
+        throw IllegalArgumentException(strPrintf("label length out of bounds: %d", label.length()), SOURCEINFO);
+    }
+
+    std::lock_guard<std::recursive_mutex> lock(m_adminLock);
+
+    std::int64_t registrationId = m_driverProxy.addCounter(typeId, keyBuffer, keyLength, label);
+
+    m_counters.emplace_back(registrationId, m_epochClock());
+
+    return registrationId;
+}
+
+std::shared_ptr<Counter> ClientConductor::findCounter(std::int64_t registrationId)
+{
+    std::lock_guard<std::recursive_mutex> lock(m_adminLock);
+
+    auto it = std::find_if(
+        m_counters.begin(),
+        m_counters.end(),
+        [registrationId](const CounterStateDefn &entry)
+        {
+            return (registrationId == entry.m_registrationId);
+        });
+
+    if (it == m_counters.end())
+    {
+        return std::shared_ptr<Counter>();
+    }
+
+    CounterStateDefn& state = *it;
+    std::shared_ptr<Counter> counter = state.m_counter.lock();
+
+    if (state.m_counterCache)
+    {
+        state.m_counterCache.reset();
+    }
+
+    if (!counter && RegistrationStatus::AWAITING_MEDIA_DRIVER == state.m_status)
+    {
+        if (m_epochClock() > (state.m_timeOfRegistration + m_driverTimeoutMs))
+        {
+            throw DriverTimeoutException(strPrintf("No response from driver in %d ms", m_driverTimeoutMs), SOURCEINFO);
+        }
+    }
+    else if (!counter && RegistrationStatus::ERRORED_MEDIA_DRIVER == state.m_status)
+    {
+        throw RegistrationException(state.m_errorCode, state.m_errorMessage, SOURCEINFO);
+    }
+
+    return counter;
+}
+
+void ClientConductor::releaseCounter(std::int64_t registrationId)
+{
+    verifyDriverIsActiveViaErrorHandler();
+
+    std::lock_guard<std::recursive_mutex> lock(m_adminLock);
+
+    auto it = std::find_if(
+        m_counters.begin(),
+        m_counters.end(),
+        [registrationId](const CounterStateDefn &entry)
+        {
+            return (registrationId == entry.m_registrationId);
+        });
+
+    if (it != m_counters.end())
+    {
+        m_driverProxy.removeCounter((*it).m_registrationId);
+
+        m_counters.erase(it);
+    }
+}
+
 void ClientConductor::addDestination(std::int64_t publicationRegistrationId, const std::string& endpointChannel)
 {
     verifyDriverIsActive();
@@ -320,10 +407,25 @@ void ClientConductor::removeDestination(std::int64_t publicationRegistrationId, 
     m_driverProxy.removeDestination(publicationRegistrationId, endpointChannel);
 }
 
+void ClientConductor::addRcvDestination(std::int64_t subscriptionRegistrationId, const std::string& endpointChannel)
+{
+    verifyDriverIsActive();
+
+    m_driverProxy.addRcvDestination(subscriptionRegistrationId, endpointChannel);
+}
+
+void ClientConductor::removeRcvDestination(std::int64_t subscriptionRegistrationId, const std::string& endpointChannel)
+{
+    verifyDriverIsActive();
+
+    m_driverProxy.removeRcvDestination(subscriptionRegistrationId, endpointChannel);
+}
+
 void ClientConductor::onNewPublication(
     std::int32_t streamId,
     std::int32_t sessionId,
-    std::int32_t positionLimitCounterId,
+    std::int32_t publicationLimitCounterId,
+    std::int32_t channelStatusIndicatorId,
     const std::string &logFileName,
     std::int64_t registrationId,
     std::int64_t originalRegistrationId)
@@ -342,7 +444,8 @@ void ClientConductor::onNewPublication(
 
         state.m_status = RegistrationStatus::REGISTERED_MEDIA_DRIVER;
         state.m_sessionId = sessionId;
-        state.m_positionLimitCounterId = positionLimitCounterId;
+        state.m_publicationLimitCounterId = publicationLimitCounterId;
+        state.m_channelStatusId = channelStatusIndicatorId;
         state.m_buffers = std::make_shared<LogBuffers>(logFileName.c_str());
         state.m_originalRegistrationId = originalRegistrationId;
 
@@ -353,7 +456,8 @@ void ClientConductor::onNewPublication(
 void ClientConductor::onNewExclusivePublication(
     std::int32_t streamId,
     std::int32_t sessionId,
-    std::int32_t positionLimitCounterId,
+    std::int32_t publicationLimitCounterId,
+    std::int32_t channelStatusIndicatorId,
     const std::string &logFileName,
     std::int64_t registrationId,
     std::int64_t originalRegistrationId)
@@ -372,22 +476,25 @@ void ClientConductor::onNewExclusivePublication(
 
         state.m_status = RegistrationStatus::REGISTERED_MEDIA_DRIVER;
         state.m_sessionId = sessionId;
-        state.m_positionLimitCounterId = positionLimitCounterId;
+        state.m_publicationLimitCounterId = publicationLimitCounterId;
+        state.m_channelStatusId = channelStatusIndicatorId;
         state.m_buffers = std::make_shared<LogBuffers>(logFileName.c_str());
         state.m_originalRegistrationId = originalRegistrationId;
 
-        m_onNewPublicationHandler(state.m_channel, streamId, sessionId, registrationId);
+        m_onNewExclusivePublicationHandler(state.m_channel, streamId, sessionId, registrationId);
     }
 }
 
-void ClientConductor::onOperationSuccess(std::int64_t correlationId)
+void ClientConductor::onSubscriptionReady(
+    std::int64_t registrationId,
+    std::int32_t channelStatusId)
 {
     std::lock_guard<std::recursive_mutex> lock(m_adminLock);
 
     auto subIt = std::find_if(m_subscriptions.begin(), m_subscriptions.end(),
-        [correlationId](const SubscriptionStateDefn &entry)
+        [registrationId](const SubscriptionStateDefn &entry)
         {
-            return (correlationId == entry.m_registrationId);
+            return (registrationId == entry.m_registrationId);
         });
 
     if (subIt != m_subscriptions.end() && (*subIt).m_status == RegistrationStatus::AWAITING_MEDIA_DRIVER)
@@ -395,12 +502,51 @@ void ClientConductor::onOperationSuccess(std::int64_t correlationId)
         SubscriptionStateDefn& state = (*subIt);
 
         state.m_status = RegistrationStatus::REGISTERED_MEDIA_DRIVER;
-        state.m_subscriptionCache =
-            std::make_shared<Subscription>(*this, state.m_registrationId, state.m_channel, state.m_streamId);
+        state.m_subscriptionCache = std::make_shared<Subscription>(
+            *this, state.m_registrationId, state.m_channel, state.m_streamId, channelStatusId);
         state.m_subscription = std::weak_ptr<Subscription>(state.m_subscriptionCache);
-        m_onNewSubscriptionHandler(state.m_channel, state.m_streamId, correlationId);
+        m_onNewSubscriptionHandler(state.m_channel, state.m_streamId, registrationId);
         return;
     }
+}
+
+void ClientConductor::onAvailableCounter(
+    std::int64_t registrationId,
+    std::int32_t counterId)
+{
+    std::lock_guard<std::recursive_mutex> lock(m_adminLock);
+
+    auto counterIt = std::find_if(m_counters.begin(), m_counters.end(),
+        [registrationId](const CounterStateDefn &entry)
+        {
+            return (registrationId == entry.m_registrationId);
+        });
+
+    if (counterIt != m_counters.end() && (*counterIt).m_status == RegistrationStatus::AWAITING_MEDIA_DRIVER)
+    {
+        CounterStateDefn& state = (*counterIt);
+
+        state.m_status = RegistrationStatus::REGISTERED_MEDIA_DRIVER;
+        state.m_counterId = counterId;
+        state.m_counterCache = std::make_shared<Counter>(this, m_counterValuesBuffer, state.m_registrationId, counterId);
+        state.m_counter = std::weak_ptr<Counter>(state.m_counterCache);
+    }
+
+    m_onAvailableCounterHandler(m_countersReader, registrationId, counterId);
+}
+
+void ClientConductor::onUnavailableCounter(
+    std::int64_t registrationId,
+    std::int32_t counterId)
+{
+    std::lock_guard<std::recursive_mutex> lock(m_adminLock);
+
+    m_onUnavailableCounterHandler(m_countersReader, registrationId, counterId);
+}
+
+void ClientConductor::onOperationSuccess(std::int64_t correlationId)
+{
+    std::lock_guard<std::recursive_mutex> lock(m_adminLock);
 }
 
 void ClientConductor::onErrorResponse(
@@ -451,8 +597,21 @@ void ClientConductor::onErrorResponse(
         (*exPubIt).m_errorMessage = errorMessage;
         return;
     }
-}
 
+    auto counterIt = std::find_if(m_counters.begin(), m_counters.end(),
+        [offendingCommandCorrelationId](const CounterStateDefn &entry)
+        {
+            return (offendingCommandCorrelationId == entry.m_registrationId);
+        });
+
+    if (counterIt != m_counters.end())
+    {
+        (*counterIt).m_status = RegistrationStatus::ERRORED_MEDIA_DRIVER;
+        (*counterIt).m_errorCode = errorCode;
+        (*counterIt).m_errorMessage = errorMessage;
+        return;
+    }
+}
 
 void ClientConductor::onAvailableImage(
     std::int32_t streamId,
@@ -504,7 +663,8 @@ void ClientConductor::onAvailableImage(
 
 void ClientConductor::onUnavailableImage(
     std::int32_t streamId,
-    std::int64_t correlationId)
+    std::int64_t correlationId,
+    std::int64_t subscriptionRegistrationId)
 {
     const long long now = m_epochClock();
     std::lock_guard<std::recursive_mutex> lock(m_adminLock);
@@ -512,7 +672,7 @@ void ClientConductor::onUnavailableImage(
     std::for_each(m_subscriptions.begin(), m_subscriptions.end(),
         [&](const SubscriptionStateDefn &entry)
         {
-            if (streamId == entry.m_streamId)
+            if (subscriptionRegistrationId == entry.m_registrationId)
             {
                 std::shared_ptr<Subscription> subscription = entry.m_subscription.lock();
 

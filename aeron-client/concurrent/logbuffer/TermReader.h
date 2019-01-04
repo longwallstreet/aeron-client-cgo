@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017 Real Logic Ltd.
+ * Copyright 2014-2018 Real Logic Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,7 +80,7 @@ inline void read(
 
     try
     {
-        do
+        while (outcome.fragmentsRead < fragmentsLimit && termOffset < capacity)
         {
             const std::int32_t frameLength = FrameDescriptor::frameLengthVolatile(termBuffer, termOffset);
             if (frameLength <= 0)
@@ -95,13 +95,11 @@ inline void read(
             {
                 header.buffer(termBuffer);
                 header.offset(fragmentOffset);
-                handler(termBuffer, fragmentOffset + DataFrameHeader::LENGTH, frameLength - DataFrameHeader::LENGTH,
-                    header);
+                handler(termBuffer, fragmentOffset + DataFrameHeader::LENGTH, frameLength - DataFrameHeader::LENGTH, header);
 
                 ++outcome.fragmentsRead;
             }
         }
-        while (outcome.fragmentsRead < fragmentsLimit && termOffset < capacity);
     }
     catch (const std::exception& ex)
     {

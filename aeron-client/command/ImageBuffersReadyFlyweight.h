@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017 Real Logic Ltd.
+ * Copyright 2014-2018 Real Logic Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 #include <cstdint>
 #include <stddef.h>
+#include <util/BitUtil.h>
 #include <util/Exceptions.h>
 #include <util/StringUtil.h>
 #include "Flyweight.h"
@@ -161,7 +162,9 @@ public:
     {
         const util::index_t startOfSourceIdentity = sourceIdentityOffset();
 
-        return startOfSourceIdentity + stringGetLength(startOfSourceIdentity) + (util::index_t)sizeof(std::int32_t);
+        return startOfSourceIdentity +
+            stringGetLength(startOfSourceIdentity) +
+            static_cast<util::index_t>(sizeof(std::int32_t));
     }
 
 private:
@@ -173,8 +176,11 @@ private:
 
     inline util::index_t sourceIdentityOffset() const
     {
-        const util::index_t startOfLogFileName = logFileNameOffset();
-        return startOfLogFileName + stringGetLength(startOfLogFileName) + (util::index_t)sizeof(std::int32_t);
+        const util::index_t offset = logFileNameOffset();
+        const util::index_t alignment = static_cast<util::index_t>(sizeof(std::int32_t));
+        const util::index_t logFileNameLength = aeron::util::BitUtil::align(stringGetLength(offset), alignment);
+
+        return offset + sizeof(std::int32_t) + logFileNameLength;
     }
 };
 

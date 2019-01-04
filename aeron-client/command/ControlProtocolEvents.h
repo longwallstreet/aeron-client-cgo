@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017 Real Logic Ltd.
+ * Copyright 2014-2018 Real Logic Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,12 +45,22 @@ struct ControlProtocolEvents
     static const std::int32_t ADD_DESTINATION = 0x07;
     /** Remove Destination */
     static const std::int32_t REMOVE_DESTINATION = 0x08;
+    /** Add Counter */
+    static const std::int32_t ADD_COUNTER = 0x09;
+    /** Remove Counter */
+    static const std::int32_t REMOVE_COUNTER = 0x0A;
+    /** Client Close */
+    static const std::int32_t CLIENT_CLOSE = 0x0B;
+    /** Add Destination for existing Subscription */
+    static const std::int32_t ADD_RCV_DESTINATION = 0x0C;
+    /** Remove Destination for existing Subscription */
+    static const std::int32_t REMOVE_RCV_DESTINATION = 0x0D;
 
     // Media Driver to Clients
 
     /** Error Response */
     static const std::int32_t ON_ERROR = 0x0F01;
-    /** New subscription Buffer Notification */
+    /** New image Buffer Notification */
     static const std::int32_t ON_AVAILABLE_IMAGE = 0x0F02;
     /** New publication Buffer Notification */
     static const std::int32_t ON_PUBLICATION_READY = 0x0F03;
@@ -60,6 +70,12 @@ struct ControlProtocolEvents
     static const std::int32_t ON_UNAVAILABLE_IMAGE = 0x0F05;
     /** New Exclusive Publication Buffer notification */
     static const std::int32_t ON_EXCLUSIVE_PUBLICATION_READY = 0x0F06;
+    /** New subscription notification */
+    static const std::int32_t ON_SUBSCRIPTION_READY = 0x0F07;
+    /** New counter notification */
+    static const std::int32_t ON_COUNTER_READY = 0x0F08;
+    /** inform clients of removal of counter */
+    static const std::int32_t ON_UNAVAILABLE_COUNTER = 0x0F09;
 };
 
 }}

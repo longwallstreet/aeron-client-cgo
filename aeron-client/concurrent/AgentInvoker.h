@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017 Real Logic Ltd.
+ * Copyright 2014-2018 Real Logic Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ public:
      *
      * @return has the Agent been started?
      */
-    inline bool isStarted()
+    inline bool isStarted() const
     {
         return m_isStarted;
     }
@@ -54,7 +54,7 @@ public:
      *
      * @return is the Agent been started successfully and not closed?
      */
-    inline bool isRunning()
+    inline bool isRunning() const
     {
         return m_isRunning;
     }
@@ -64,7 +64,7 @@ public:
      *
      * @return has the Agent been closed?
      */
-    inline bool isClosed()
+    inline bool isClosed() const
     {
         return m_isClosed;
     }

@@ -14,24 +14,38 @@
  * limitations under the License.
  */
 
-#ifndef INCLUDED_AERON_UTIL_MACRO_UTIL_FILE__
-#define INCLUDED_AERON_UTIL_MACRO_UTIL_FILE__
+#ifndef AERON_YIELDING_IDLE_STRATEGY_H
+#define AERON_YIELDING_IDLE_STRATEGY_H
 
-#define STRINGIFY(x) #x
-#define TOSTRING(x) STRINGIFY(x)
+#include <thread>
 
-#define CONCAT_SYMBOLS(x, y) x##y
+namespace aeron { namespace concurrent {
 
-#if COND_MOCK == 1
-    #define COND_MOCK_VIRTUAL virtual
-#else
-    #define COND_MOCK_VIRTUAL
-#endif
+class YieldingIdleStrategy
+{
+public:
+    YieldingIdleStrategy()
+    {
+    }
 
-#if defined(__GNUC__)
-    #define AERON_COND_EXPECT(exp,c) (__builtin_expect((exp),c))
-#else
-    #define AERON_COND_EXPECT(exp,c) (exp)
-#endif
+    inline void idle(int workCount)
+    {
+        if (workCount > 0)
+        {
+            return;
+        }
+
+        std::this_thread::yield();
+    }
+
+    inline void idle()
+    {
+        std::this_thread::yield();
+    }
+
+private:
+};
+
+}}
 
 #endif

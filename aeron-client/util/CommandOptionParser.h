@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017 Real Logic Ltd.
+ * Copyright 2014-2018 Real Logic Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,11 +32,11 @@ class CommandOptionParser
     public:
         CommandOptionParser ();
 
-        void parse (int argc, char** argv);
-        void addOption (const CommandOption& option);
-        CommandOption& getOption (char optionChar);
+        void parse(int argc, char** argv);
+        void addOption(const CommandOption& option);
+        CommandOption& getOption(char optionChar);
 
-        void displayOptionsHelp (std::ostream& out) const;
+        void displayOptionsHelp(std::ostream& out) const;
 };
 
 }}

@@ -14,24 +14,29 @@
  * limitations under the License.
  */
 
-#ifndef INCLUDED_AERON_UTIL_MACRO_UTIL_FILE__
-#define INCLUDED_AERON_UTIL_MACRO_UTIL_FILE__
+#ifndef AERON_NO_OP_IDLE_STRATEGY_H
+#define AERON_NO_OP_IDLE_STRATEGY_H
 
-#define STRINGIFY(x) #x
-#define TOSTRING(x) STRINGIFY(x)
+namespace aeron { namespace concurrent {
 
-#define CONCAT_SYMBOLS(x, y) x##y
+class NoOpIdleStrategy
+{
+public:
+    NoOpIdleStrategy()
+    {
+    }
 
-#if COND_MOCK == 1
-    #define COND_MOCK_VIRTUAL virtual
-#else
-    #define COND_MOCK_VIRTUAL
-#endif
+    inline void idle(int workCount)
+    {
+    }
 
-#if defined(__GNUC__)
-    #define AERON_COND_EXPECT(exp,c) (__builtin_expect((exp),c))
-#else
-    #define AERON_COND_EXPECT(exp,c) (exp)
-#endif
+    inline void idle()
+    {
+    }
+
+private:
+};
+
+}}
 
 #endif

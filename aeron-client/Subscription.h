@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017 Real Logic Ltd.
+ * Copyright 2014-2018 Real Logic Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <iostream>
 #include <atomic>
 #include <concurrent/logbuffer/TermReader.h>
+#include "concurrent/status/StatusIndicatorReader.h"
 #include "Image.h"
 
 namespace aeron {
@@ -49,7 +50,11 @@ class Subscription
 public:
     /// @cond HIDDEN_SYMBOLS
     Subscription(
-        ClientConductor& conductor, std::int64_t registrationId, const std::string& channel, std::int32_t streamId);
+        ClientConductor& conductor,
+        std::int64_t registrationId,
+        const std::string& channel,
+        std::int32_t streamId,
+        std::int32_t channelStatusId);
     /// @endcond
     virtual ~Subscription();
 
@@ -84,13 +89,37 @@ public:
     }
 
     /**
+     * Get the counter id used to represent the channel status.
+     *
+     * @return the counter id used to represent the channel status.
+     */
+    inline std::int32_t channelStatusId() const
+    {
+        return m_channelStatusId;
+    }
+
+    /**
+     * Add a destination manually to a multi-destination Subscription.
+     *
+     * @param endpointChannel for the destination to add.
+     */
+    void addDestination(const std::string& endpointChannel);
+
+    /**
+     * Remove a previously added destination from a multi-destination Subscription.
+     *
+     * @param endpointChannel for the destination to remove.
+     */
+    void removeDestination(const std::string& endpointChannel);
+
+    /**
      * Poll the Image s under the subscription for having reached End of Stream.
      *
      * @param endOfStreamHandler callback for handling end of stream indication.
      * @return number of Image s that have reached End of Stream.
      */
     template <typename F>
-    inline int pollEndOfStreams(F&& endOfStreamHandler)
+    inline int pollEndOfStreams(F&& endOfStreamHandler) const
     {
         const struct ImageList *imageList = std::atomic_load_explicit(&m_imageList, std::memory_order_acquire);
         const std::size_t length = imageList->m_length;
@@ -214,9 +243,31 @@ public:
     }
 
     /**
-     * Count of images connected to this subscription.
+     * Is the subscription connected by having at least one open image available.
      *
-     * @return count of images connected to this subscription.
+     * @return true if the subscription has more than one open image available.
+     */
+    inline bool isConnected() const
+    {
+        const struct ImageList *imageList = std::atomic_load_explicit(&m_imageList, std::memory_order_acquire);
+        const std::size_t length = imageList->m_length;
+        Image *images = imageList->m_images;
+
+        for (std::size_t i = 0; i < length; i++)
+        {
+            if (!images[i].isClosed())
+            {
+                return true;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Count of images associated with this subscription.
+     *
+     * @return count of images associated with this subscription.
      */
     inline int imageCount() const
     {
@@ -277,7 +328,7 @@ public:
      *
      * @return a std::vector of active {@link Image}s that match this subscription.
      */
-    inline std::shared_ptr<std::vector<Image>> images()
+    inline std::shared_ptr<std::vector<Image>> images() const
     {
         std::shared_ptr<std::vector<Image>> result(new std::vector<Image>());
 
@@ -296,7 +347,7 @@ public:
      * @return length of Image list
      */
     template <typename F>
-    inline int forEachImage(F&& func)
+    inline int forEachImage(F&& func) const
     {
         const struct ImageList *imageList = std::atomic_load_explicit(&m_imageList, std::memory_order_acquire);
         const std::size_t length = imageList->m_length;
@@ -349,7 +400,7 @@ public:
 
         for (std::size_t i = 0; i < length; i++)
         {
-            newArray[i] = std::move(oldArray[i]);
+            newArray[i] = oldArray[i];
         }
 
         newArray[length] = image; // copy-assign
@@ -372,6 +423,7 @@ public:
         {
             if (oldArray[i].correlationId() == correlationId)
             {
+                oldArray[i].close();
                 index = i;
                 break;
             }
@@ -385,7 +437,7 @@ public:
             {
                 if (i != index)
                 {
-                    newArray[j++] = std::move(oldArray[i]);
+                    newArray[j++] = oldArray[i];
                 }
             }
 
@@ -394,7 +446,7 @@ public:
             std::atomic_store_explicit(&m_imageList, newImageList, std::memory_order_release);
         }
 
-        return std::pair<struct ImageList *,int>(
+        return std::pair<struct ImageList *, int>(
                 (-1 != index) ? oldImageList : nullptr,
                 index);
     }
@@ -419,9 +471,17 @@ public:
     }
     /// @endcond
 
+    /**
+     * Get the status for the channel of this {@link Subscription}
+     *
+     * @return status code for this channel
+     */
+    std::int64_t channelStatus() const;
+
 private:
     ClientConductor& m_conductor;
     const std::string m_channel;
+    std::int32_t m_channelStatusId;
     std::size_t m_roundRobinIndex = 0;
     std::int64_t m_registrationId;
     std::int32_t m_streamId;

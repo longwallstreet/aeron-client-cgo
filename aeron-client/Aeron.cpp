@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017 Real Logic Ltd.
+ * Copyright 2014-2018 Real Logic Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,8 @@ static const std::chrono::duration<long, std::milli> IDLE_SLEEP_MS_1(1);
 static const std::chrono::duration<long, std::milli> IDLE_SLEEP_MS_16(16);
 static const std::chrono::duration<long, std::milli> IDLE_SLEEP_MS_100(100);
 
+static const char* AGENT_NAME = "client-conductor";
+
 static long long currentTimeMillis()
 {
     using namespace std::chrono;
@@ -40,6 +42,7 @@ Aeron::Aeron(Context &context) :
     m_cncBuffer(mapCncFile(context)),
     m_toDriverAtomicBuffer(CncFileDescriptor::createToDriverBuffer(m_cncBuffer)),
     m_toClientsAtomicBuffer(CncFileDescriptor::createToClientsBuffer(m_cncBuffer)),
+    m_countersMetadataBuffer(CncFileDescriptor::createCounterMetadataBuffer(m_cncBuffer)),
     m_countersValueBuffer(CncFileDescriptor::createCounterValuesBuffer(m_cncBuffer)),
     m_toDriverRingBuffer(m_toDriverAtomicBuffer),
     m_driverProxy(m_toDriverRingBuffer),
@@ -49,16 +52,19 @@ Aeron::Aeron(Context &context) :
         currentTimeMillis,
         m_driverProxy,
         m_toClientsCopyReceiver,
+        m_countersMetadataBuffer,
         m_countersValueBuffer,
         context.m_onNewPublicationHandler,
+        context.m_onNewExclusivePublicationHandler,
         context.m_onNewSubscriptionHandler,
         context.m_exceptionHandler,
+        context.m_onAvailableCounterHandler,
+        context.m_onUnavailableCounterHandler,
         context.m_mediaDriverTimeout,
         context.m_resourceLingerTimeout,
-        CncFileDescriptor::clientLivenessTimeout(m_cncBuffer),
-        context.m_publicationConnectionTimeout),
+        CncFileDescriptor::clientLivenessTimeout(m_cncBuffer)),
     m_idleStrategy(IDLE_SLEEP_MS),
-    m_conductorRunner(m_conductor, m_idleStrategy, m_context.m_exceptionHandler),
+    m_conductorRunner(m_conductor, m_idleStrategy, m_context.m_exceptionHandler, AGENT_NAME),
     m_conductorInvoker(m_conductor, m_context.m_exceptionHandler)
 {
     if (m_context.m_useConductorAgentInvoker)
@@ -92,12 +98,12 @@ inline MemoryMappedFile::ptr_t Aeron::mapCncFile(Context &context)
 
     while (true)
     {
-        while (MemoryMappedFile::getFileSize(context.cncFileName().c_str()) == -1)
+        while (MemoryMappedFile::getFileSize(context.cncFileName().c_str()) <= 0)
         {
             if (currentTimeMillis() > (startMs + context.m_mediaDriverTimeout))
             {
                 throw DriverTimeoutException(
-                    util::strPrintf("CnC file not found: %s", context.cncFileName().c_str()), SOURCEINFO);
+                    util::strPrintf("CnC file not created: %s", context.cncFileName().c_str()), SOURCEINFO);
             }
 
             std::this_thread::sleep_for(IDLE_SLEEP_MS_16);

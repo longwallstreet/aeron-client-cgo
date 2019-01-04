@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017 Real Logic Ltd.
+ * Copyright 2014-2018 Real Logic Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,9 @@ typedef std::int32_t index_t;
 inline static index_t convertSizeToIndex(size_t size)
 {
     if (size > std::numeric_limits<index_t>::max())
+    {
         return std::numeric_limits<index_t>::max();
+    }
 
     return static_cast<index_t>(size);
 }

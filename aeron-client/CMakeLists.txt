@@ -1,5 +1,5 @@
 #
-# Copyright 2014-2017 Real Logic Ltd.
+# Copyright 2014-2018 Real Logic Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,8 +14,6 @@
 # limitations under the License.
 #
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-
 SET(SOURCE
     Publication.cpp
     ExclusivePublication.cpp
@@ -23,6 +21,7 @@ SET(SOURCE
     ClientConductor.cpp
     Aeron.cpp
     LogBuffers.cpp
+    Counter.cpp
     util/MemoryMappedFile.cpp
     util/CommandOption.cpp
     util/CommandOptionParser.cpp)
@@ -42,6 +41,7 @@ SET(HEADERS
     FragmentAssembler.h
     ControlledFragmentAssembler.h
     ExclusivePublication.h
+    Counter.h
     command/ImageMessageFlyweight.h
     command/ImageBuffersReadyFlyweight.h
     command/ControlProtocolEvents.h
@@ -53,6 +53,10 @@ SET(HEADERS
     command/RemoveMessageFlyweight.h
     command/SubscriptionMessageFlyweight.h
     command/DestinationMessageFlyweight.h
+    command/SubscriptionReadyFlyweight.h
+    command/OperationSucceededFlyweight.h
+    command/CounterMessageFlyweight.h
+    command/CounterUpdateFlyweight.h
     concurrent/AgentRunner.h
     concurrent/AgentInvoker.h
     concurrent/Atomic64.h
@@ -61,7 +65,9 @@ SET(HEADERS
     concurrent/BusySpinIdleStrategy.h
     concurrent/CountersManager.h
     concurrent/CountersReader.h
+    concurrent/NoOpIdleStrategy.h
     concurrent/SleepingIdleStrategy.h
+    concurrent/YieldingIdleStrategy.h
     concurrent/atomic/Atomic64_gcc_cpp11.h
     concurrent/atomic/Atomic64_gcc_x86_64.h
     concurrent/atomic/Atomic64_msvc.h
@@ -94,6 +100,7 @@ SET(HEADERS
     concurrent/status/ReadablePosition.h
     concurrent/status/Position.h
     concurrent/status/UnsafeBufferPosition.h
+    concurrent/status/StatusIndicatorReader.h
     protocol/HeaderFlyweight.h
     protocol/NakFlyweight.h
     protocol/StatusMessageFlyweight.h
@@ -116,5 +123,20 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DDISABLE_BOUNDS_CHECKS"
 # static library
 add_library(aeron_client STATIC ${SOURCE} ${HEADERS})
 
-install(TARGETS aeron_client ARCHIVE DESTINATION lib)
-install(DIRECTORY . DESTINATION  include FILES_MATCHING PATTERN "*.h")
+target_include_directories(aeron_client
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+if (NOT WIN32)
+	set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+	set(THREADS_PREFER_PTHREAD_FLAG TRUE)
+endif()
+
+target_link_libraries(aeron_client
+    INTERFACE ${CMAKE_THREAD_LIBS_INIT}
+)
+
+if (AERON_INSTALL_TARGETS)
+    install(TARGETS aeron_client ARCHIVE DESTINATION lib)
+    install(DIRECTORY . DESTINATION  include FILES_MATCHING PATTERN "*.h")
+endif()

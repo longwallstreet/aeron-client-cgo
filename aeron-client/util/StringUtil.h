@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017 Real Logic Ltd.
+ * Copyright 2014-2018 Real Logic Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,10 +52,16 @@ valueType parse (const std::string& input)
     std::istringstream stream (str);
     valueType value;
 
-    if (std::is_integral<valueType>::value && input.length() > 2 && input[0] == '0' && (input[1] == 'x' || input[1] == 'X'))
+    if (std::is_integral<valueType>::value && input.length() > 2 &&
+        input[0] == '0' &&
+        (input[1] == 'x' || input[1] == 'X'))
+    {
         stream >> std::hex >> value;
+    }
     else
+    {
         stream >> value;
+    }
 
     // if we failed extract an valid value or we didnt use up all the chars then throw an error
     if (stream.fail() || !stream.eof())
@@ -139,7 +145,7 @@ std::string strconcat (Ts... vs)
 inline bool continuationBarrier(const std::string& label)
 {
     bool result = false;
-    char response;
+    char response = '\0';
     std::cout << std::endl << label << " (y/n): ";
     std::cin >> response;
 

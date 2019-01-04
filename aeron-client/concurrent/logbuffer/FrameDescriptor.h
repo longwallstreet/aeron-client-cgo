@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017 Real Logic Ltd.
+ * Copyright 2014-2018 Real Logic Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ namespace aeron { namespace concurrent { namespace logbuffer {
 *  +---------------------------------------------------------------+
 * </pre>
 *
-* The (B)egin and (E)nd flags are used for message fragmentation. R is for reserved bit.
+* The (B)egin and (E)nd flags are used for message fragmentation. (R) is for reserved bit.
 * Both are set for a message that does not span frames.
 */
 
@@ -67,6 +67,8 @@ static const util::index_t FLAGS_OFFSET = 5;
 static const util::index_t TYPE_OFFSET = 6;
 static const util::index_t LENGTH_OFFSET = 0;
 static const util::index_t TERM_OFFSET = 8;
+
+static const util::index_t MAX_MESSAGE_LENGTH = 16 * 1024 * 1024;
 
 inline static void checkHeaderLength(util::index_t length)
 {
@@ -88,7 +90,7 @@ inline static void checkMaxFrameLength(util::index_t length)
 
 inline static util::index_t computeMaxMessageLength(util::index_t capacity)
 {
-    return capacity / 8;
+    return std::min(capacity / 8, MAX_MESSAGE_LENGTH);
 }
 
 inline static util::index_t typeOffset(util::index_t frameOffset)
@@ -116,7 +118,7 @@ inline static void frameType(AtomicBuffer& logBuffer, util::index_t frameOffset,
     logBuffer.putUInt16(typeOffset(frameOffset), type);
 }
 
-inline static std::uint16_t frameType(AtomicBuffer& logBuffer, util::index_t frameOffset)
+inline static std::uint16_t frameType(const AtomicBuffer& logBuffer, util::index_t frameOffset)
 {
     return logBuffer.getUInt16(frameOffset);
 }
@@ -131,12 +133,12 @@ inline static void frameTermOffset(AtomicBuffer& logBuffer, util::index_t frameO
     logBuffer.putInt32(termOffsetOffset(frameOffset), termOffset);
 }
 
-inline static bool isPaddingFrame(AtomicBuffer& logBuffer, util::index_t frameOffset)
+inline static bool isPaddingFrame(const AtomicBuffer& logBuffer, util::index_t frameOffset)
 {
     return logBuffer.getUInt16(typeOffset(frameOffset)) == DataFrameHeader::HDR_TYPE_PAD;
 }
 
-inline static std::int32_t frameLengthVolatile(AtomicBuffer& logBuffer, util::index_t frameOffset)
+inline static std::int32_t frameLengthVolatile(const AtomicBuffer& logBuffer, util::index_t frameOffset)
 {
     // TODO: need to byte order to LITTLE_ENDIAN
     return logBuffer.getInt32Volatile(lengthOffset(frameOffset));
@@ -148,7 +150,7 @@ inline static void frameLengthOrdered(AtomicBuffer& logBuffer, util::index_t fra
     logBuffer.putInt32Ordered(lengthOffset(frameOffset), frameLength);
 }
 
-inline static std::uint8_t frameVersion(AtomicBuffer& logBuffer, util::index_t frameOffset)
+inline static std::uint8_t frameVersion(const AtomicBuffer& logBuffer, util::index_t frameOffset)
 {
     return logBuffer.getUInt8(frameOffset);
 }

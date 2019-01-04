@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017 Real Logic Ltd.
+ * Copyright 2014-2018 Real Logic Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,10 @@ namespace aeron { namespace concurrent { namespace logbuffer {
 namespace TermGapScanner {
 
 inline std::int32_t scanForGap(
-    AtomicBuffer& termBuffer, std::int32_t termId, util::index_t rebuildOffset, std::int32_t hwmOffset,
+    AtomicBuffer& termBuffer,
+    std::int32_t termId,
+    util::index_t rebuildOffset,
+    std::int32_t hwmOffset,
     std::function<void(std::int32_t, AtomicBuffer&, std::int32_t, std::int32_t)> handler)
 {
     do

@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017 Real Logic Ltd.
+ * Copyright 2014-2018 Real Logic Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,13 +66,19 @@ using namespace aeron::concurrent;
 *  |                   Client Liveness Timeout                     |
 *  |                                                               |
 *  +---------------------------------------------------------------+
+*  |                    Driver Start Timestamp                     |
+*  |                                                               |
+*  +---------------------------------------------------------------+
+*  |                         Driver PID                            |
+*  |                                                               |
+*  +---------------------------------------------------------------+
 * </pre>
 */
 namespace CncFileDescriptor {
 
 static const std::string CNC_FILE = "cnc.dat";
 
-static const std::int32_t CNC_VERSION = 7;
+static const std::int32_t CNC_VERSION = 14;
 
 #pragma pack(push)
 #pragma pack(4)
@@ -85,6 +91,8 @@ struct MetaDataDefn
     std::int32_t counterValuesBufferLength;
     std::int32_t errorLogBufferLength;
     std::int64_t clientLivenessTimeout;
+    std::int64_t startTimestamp;
+    std::int64_t pid;
 };
 #pragma pack(pop)
 
@@ -168,6 +176,24 @@ inline static std::int64_t clientLivenessTimeout(MemoryMappedFile::ptr_t cncFile
     const MetaDataDefn& metaData = metaDataBuffer.overlayStruct<MetaDataDefn>(0);
 
     return metaData.clientLivenessTimeout;
+}
+
+inline static std::int64_t startTimestamp(MemoryMappedFile::ptr_t cncFile)
+{
+    AtomicBuffer metaDataBuffer(cncFile->getMemoryPtr(), convertSizeToIndex(cncFile->getMemorySize()));
+
+    const MetaDataDefn& metaData = metaDataBuffer.overlayStruct<MetaDataDefn>(0);
+
+    return metaData.startTimestamp;
+}
+
+inline static std::int64_t pid(MemoryMappedFile::ptr_t cncFile)
+{
+    AtomicBuffer metaDataBuffer(cncFile->getMemoryPtr(), convertSizeToIndex(cncFile->getMemorySize()));
+
+    const MetaDataDefn& metaData = metaDataBuffer.overlayStruct<MetaDataDefn>(0);
+
+    return metaData.pid;
 }
 
 }

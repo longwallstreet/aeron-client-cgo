@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017 Real Logic Ltd.
+ * Copyright 2014-2018 Real Logic Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,8 +47,9 @@ private:
     std::string m_what;
 
 public:
-    SourcedException(const std::string &what, const std::string& function, const std::string& where)
-            : m_where(function + where), m_what(what)
+    SourcedException(const std::string &what, const std::string& function, const std::string& where) :
+        m_where(function + where),
+        m_what(what)
     {
     }
 
@@ -91,7 +92,8 @@ private:
 public:
     RegistrationException(
         std::int32_t errorCode, const std::string &what, const std::string& function, const std::string& where) :
-        SourcedException(what, function, where), m_errorCode(errorCode)
+        SourcedException(what, function, where),
+        m_errorCode(errorCode)
     {
     }
 

@@ -13,6 +13,7 @@ SET(AERON_CLIENT_SOURCE
     aeron-client/Subscription.cpp
     aeron-client/ClientConductor.cpp
     aeron-client/Aeron.cpp
+    aeron-client/Counter.cpp
     aeron-client/LogBuffers.cpp
     aeron-client/util/MemoryMappedFile.cpp
     aeron-client/util/CommandOption.cpp

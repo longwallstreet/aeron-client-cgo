@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017 Real Logic Ltd.
+ * Copyright 2014-2018 Real Logic Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,13 @@
 #ifndef INCLUDED_AERON_UTIL_BITUTIL__
 #define INCLUDED_AERON_UTIL_BITUTIL__
 
+#include <cstdint>
 #include <type_traits>
 #include <util/Exceptions.h>
+
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
 
 namespace aeron { namespace util {
 
@@ -57,7 +62,9 @@ namespace BitUtil
         static_assert (std::is_integral<value_t>::value, "next only available on integer types");
         value_t next = current + 1;
         if (next == max)
+        {
             next = 0;
+        }
 
         return next;
     }
@@ -67,7 +74,9 @@ namespace BitUtil
     {
         static_assert (std::is_integral<value_t>::value, "previous only available on integer types");
         if (0 == current)
+        {
             return max - 1;
+        }
 
         return current - 1;
     }
@@ -82,7 +91,14 @@ namespace BitUtil
 #if defined(__GNUC__)
         return __builtin_clz(value);
 #elif defined(_MSC_VER)
-        return __lzcnt(value);
+        unsigned long r;
+
+        if (_BitScanReverse(&r, (unsigned long)value))
+        {
+            return 31 - (int)r;
+        }
+
+        return 32;
 #else
 #error "do not understand how to clz"
 #endif
@@ -94,24 +110,35 @@ namespace BitUtil
     {
 #if defined(__GNUC__)
         return __builtin_ctz(value);
+#elif defined(_MSC_VER)
+        unsigned long r;
+
+        if (_BitScanForward(&r, (unsigned long)value))
+        {
+            return r;
+        }
+
+        return 32;
 #else
         static_assert(std::is_integral<value_t>::value, "numberOfTrailingZeroes only available on integral types");
-        static_assert(sizeof(value_t)==4, "numberOfTrailingZeroes only available on 32-bit integral types");
+        static_assert(sizeof(value_t) <= 4, "numberOfTrailingZeroes only available on up to 32-bit integral types");
 
-        static char table[32] = {
+        static char table[32] =
+        {
             0, 1, 2, 24, 3, 19, 6, 25,
             22, 4, 20, 10, 16, 7, 12, 26,
             31, 23, 18, 5, 21, 9, 15, 11,
-            30, 17, 8, 14, 29, 13, 28, 27};
+            30, 17, 8, 14, 29, 13, 28, 27
+        };
 
         if (value == 0)
         {
             return 32;
         }
 
-        value = (value & -value) * 0x04D7651F;
+        uint32_t index = static_cast<uint32_t>((value & -value) * 0x04D7651F);
 
-        return table[value >> 27];
+        return table[index >> 27];
 #endif
     }
 
@@ -124,16 +151,13 @@ namespace BitUtil
     {
         static_assert(std::is_integral<value_t>::value, "findNextPowerOfTwo only available on integral types");
 
-#if defined(__GNUC__)
-        if (sizeof(value) == sizeof(unsigned int))
-            return 1 << (32 - numberOfLeadingZeroes(value - 1));
-#endif
-
         value--;
 
         // Set all bits below the leading one using binary expansion http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
         for (size_t i = 1; i < sizeof(value) * 8; i = i * 2)
+        {
             value |= (value >> i);
+        }
 
         return value + 1;
     }
@@ -147,14 +171,18 @@ namespace BitUtil
     {
         static_assert(std::is_integral<value_t>::value, "fastMod3 only available on integral types");
 
-        static char table[62] = {0,1,2, 0,1,2, 0,1,2, 0,1,2,
+        static char table[62] =
+        {
+            0,1,2, 0,1,2, 0,1,2, 0,1,2,
             0,1,2, 0,1,2, 0,1,2, 0,1,2, 0,1,2, 0,1,2, 0,1,2,
             0,1,2, 0,1,2, 0,1,2, 0,1,2, 0,1,2, 0,1,2, 0,1,2,
-            0,1,2, 0,1,2, 0,1};
+            0,1,2, 0,1,2, 0,1
+        };
 
         value = (value >> 16) + (value & 0xFFFF); // Max 0x1FFFE.
         value = (value >> 8) + (value & 0x00FF); // Max 0x2FD.
         value = (value >> 4) + (value & 0x000F); // Max 0x3D.
+
         return table[value];
     }
 }

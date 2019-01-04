@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017 Real Logic Ltd.
+ * Copyright 2014-2018 Real Logic Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,8 +32,8 @@ using namespace aeron::concurrent::logbuffer;
 class LogBuffers
 {
 public:
-    LogBuffers(const char *filename);
-    LogBuffers(std::uint8_t *address, index_t length);
+    explicit LogBuffers(const char *filename);
+    LogBuffers(std::uint8_t *address, std::int64_t logLength, std::int32_t termLength);
 
     virtual ~LogBuffers();
 
@@ -43,7 +43,7 @@ public:
     }
 
 private:
-    std::vector<MemoryMappedFile::ptr_t> m_memoryMappedFiles;
+    MemoryMappedFile::ptr_t m_memoryMappedFiles;
     AtomicBuffer m_buffers[LogBufferDescriptor::PARTITION_COUNT + 1];
 };
 
