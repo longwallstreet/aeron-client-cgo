@@ -40,6 +40,12 @@ int aeron_initialize(char *aeron_dir) {
                     << std::endl;
             }
         );
+	context.errorHandler(
+	    [](const std::exception& exception) {
+		std::cerr << "Catch exception: " << exception.what() << std::endl;
+		
+	    }
+	);
         g_aeron = Aeron::connect(context);
         return 0;
     } catch (std::exception const& e) {
